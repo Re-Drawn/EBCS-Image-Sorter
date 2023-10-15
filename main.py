@@ -1,12 +1,11 @@
 from PyQt6.QtWidgets import QApplication, QWidget, QRadioButton, QGroupBox, QVBoxLayout, QFileDialog, QPushButton, QLabel, QLineEdit
-from PyQt6.QtGui import QImage, QPixmap, QDoubleValidator
+from PyQt6.QtGui import QPixmap, QDoubleValidator
 from PyQt6.QtCore import QSize
 import sys
 import os
 import re
 from openpyxl import load_workbook
 
-selected = None
 class Window(QWidget):
     def __init__(self):
         super().__init__()
@@ -57,9 +56,19 @@ class Window(QWidget):
         self.excel_btn = QPushButton("Excel sheet", self)
         self.folder_btn.move(200,100)
         self.excel_btn.move(200,150)
+        self.folder_btn.hide()
+
+        self.next_btn = QPushButton("Next Image", self)
+        self.prev_btn = QPushButton("Previous Image", self)
+        self.next_btn.clicked.connect(self.cycle_img)
+        self.prev_btn.clicked.connect(self.cycle_img)
+        self.next_btn.hide()
+        self.prev_btn.hide()
+        self.next_btn.move(0,500)
+        self.prev_btn.move(0,600)
+        self.prev_btn.setEnabled(False)
 
     def init_vars(self):
-        self.selected_category = None
         self.current_image_name = None
         self.excel_columns = {"Counterfeit": ["C", 2], 
                 "Money Order": ["D", 2], 
@@ -73,10 +82,11 @@ class Window(QWidget):
                 "Receipt Type": ["L", ""], 
                 "Receipt Bank": ["M", ""], 
                 "Amount": ["N", ""]}
+        self.img_num = 0
+        self.cycling = False
 
 
     def launch_dialog(self):
-        print(self.sender().text())
         if self.sender().text() == "Select EBCS sorting folder":
             self.sorting_folder_path = QFileDialog.getExistingDirectory()
             if not self.sorting_folder_path:
@@ -88,16 +98,19 @@ class Window(QWidget):
             if not self.excel_path:
                 print("Nothing selected")
             else:
+                self.folder_btn.show()
                 self.setup_excel()
 
     def amount_changed(self):
         try:
-            self.excel_columns["Amount"] = float(self.sender().text())
+            if self.receipt_radio.isChecked():
+                self.excel_columns["Amount"][1] = float(self.sender().text())
+                self.write_excel()
         except ValueError:
             pass
 
     def radio_clicked(self):
-        # TODO: Clean up repeated cases
+        # TODO: Clean up repeated switch statement
         match self.sender():
             case self.counterfeit_radio:
                 if self.sender().isChecked():
@@ -142,7 +155,8 @@ class Window(QWidget):
                     self.excel_columns["Receipt"][1] = 2
                     self.amount_text.hide()
         # FIXME: This writes to excel sheet multiple times just for one action
-        self.write_excel()
+        if not self.cycling and self.sender().isChecked():
+            self.write_excel()
     
     def setup_excel(self):
         self.excel = load_workbook(filename=self.excel_path)
@@ -150,7 +164,38 @@ class Window(QWidget):
     
     # Find if image id in excel
     def find_entry(self):
+        radio_columns = ["C","D","E","F","G","H","I","K"]
         split = re.split("_|@|\.", self.current_image_name)
+        self.excel_row = 1
+        while True:
+            self.excel_row += 1
+            if self.excel_others[f"A{self.excel_row}"].value == int(split[1]):
+                print(f"existing entry found on row {self.excel_row}")
+                break
+            elif not self.excel_others[f"A{self.excel_row}"].value:
+                print(f"new entry, empty row available to write on row {self.excel_row}")
+                break
+
+        self.excel_columns["Enrolled Bank"][1] = self.excel_others[f"J{self.excel_row}"].value
+        self.excel_columns["Receipt Bank"][1] = self.excel_others[f"M{self.excel_row}"].value
+        self.excel_columns["Amount"][1] = self.excel_others[f"N{self.excel_row}"].value
+        
+        if self.excel_columns["Amount"][1]:
+            self.amount_text.setText(str(self.excel_columns["Amount"][1]))
+        else:
+            self.amount_text.setText("")
+        
+        for i, column in enumerate(radio_columns):
+            if self.excel_others[f"{column}{self.excel_row}"].value == 1:
+                self.radios[i].setChecked(True)
+            else:
+                self.radios[i].setAutoExclusive(False)
+                self.radios[i].setChecked(False)
+                self.radios[i].setAutoExclusive(True)
+        
+
+
+
     
     def write_excel(self):
         # File name is split into 5 parts
@@ -162,10 +207,10 @@ class Window(QWidget):
         while True:
             row += 1
             if not self.excel_others[f"A{row}"].value:
-                print(f"new entry on row {row}")
+                print(f"writing new entry on row {row}")
                 break
             elif self.excel_others[f"A{row}"].value == int(split[1]):
-                print(f"existing entry found on row {row}")
+                print(f"overwriting existing entry found on row {row}")
                 break
         
         self.excel_others[f"A{row}"] = int(split[1])
@@ -176,11 +221,38 @@ class Window(QWidget):
 
     
     def setup_images(self):
-        dir_files = os.listdir(self.sorting_folder_path)
-        if len(dir_files) > 0:
-            self.img_box.setPixmap(QPixmap(f"{self.sorting_folder_path}/{dir_files[0]}").scaled(QSize(1000,1000)))
+        self.folder_files = os.listdir(self.sorting_folder_path)
+        if len(self.folder_files) > 0:
+            self.cycling = True
+            self.img_box.setPixmap(QPixmap(f"{self.sorting_folder_path}/{self.folder_files[self.img_num]}").scaled(QSize(1000,1000)))
             self.update()
-            self.current_image_name = dir_files[0]
+            self.current_image_name = self.folder_files[self.img_num]
+            self.find_entry()
+            self.next_btn.show()
+            self.prev_btn.show()
+            self.cycling = False
+    
+    def cycle_img(self):
+        print(self.img_num)
+        if self.sender().text() == "Next Image" and self.img_num < len(self.folder_files) - 1:
+            self.img_num += 1
+        elif self.sender().text() == "Previous Image" and self.img_num > 0:
+            self.img_num -= 1
+        
+        self.cycling = True
+        if self.img_num > 0:
+            self.prev_btn.setEnabled(True)
+        else:
+            self.prev_btn.setEnabled(False)
+        if self.img_num < len(self.folder_files) - 1:
+            self.next_btn.setEnabled(True)
+        else:
+            self.next_btn.setEnabled(False)
+        self.cycling = False
+
+        self.update()
+        self.setup_images()
+
 
 
 def main():

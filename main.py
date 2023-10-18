@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QRadioButton, QGroupBox, QVBoxLayout, QFileDialog, QPushButton, QLabel, QLineEdit
+from PyQt6.QtWidgets import QApplication, QWidget, QRadioButton, QGroupBox, QVBoxLayout, QFileDialog, QPushButton, QLabel, QLineEdit, QGridLayout
 from PyQt6.QtGui import QPixmap, QDoubleValidator
 from PyQt6.QtCore import QSize
 import sys
@@ -25,6 +25,7 @@ class Window(QWidget):
         self.radios = []
         self.radio_group = QGroupBox("Image Category", self)
         self.radio_vbox = QVBoxLayout()
+        self.layout = QGridLayout()
         
         self.counterfeit_radio = QRadioButton("Counterfeit Bills", self)
         self.money_order_radio = QRadioButton("Money Order/Transfer", self)
@@ -44,18 +45,21 @@ class Window(QWidget):
         self.amount_text.textChanged.connect(self.amount_changed)
 
         self.img_box = QLabel(self)
-        self.img_box.move(700,0)
-        self.img_box.resize(1000,1000)
+        #self.img_box.move(700,0)
+        #self.img_box.resize(1000,1000)
+
+        #self.layout.lay
 
         for radio in self.radios:
             radio.toggled.connect(self.radio_clicked)
             self.radio_vbox.addWidget(radio)
+            radio.setEnabled(False)
 
         self.radio_group.setLayout(self.radio_vbox)
         self.folder_btn = QPushButton("Select EBCS sorting folder", self)
         self.excel_btn = QPushButton("Excel sheet", self)
-        self.folder_btn.move(200,100)
-        self.excel_btn.move(200,150)
+        self.folder_btn.setMinimumSize(100, 100)
+        self.excel_btn.setMinimumSize(100, 100)
         self.folder_btn.hide()
 
         self.next_btn = QPushButton("Next Image", self)
@@ -64,9 +68,16 @@ class Window(QWidget):
         self.prev_btn.clicked.connect(self.cycle_img)
         self.next_btn.hide()
         self.prev_btn.hide()
-        self.next_btn.move(0,500)
-        self.prev_btn.move(0,600)
+        self.prev_btn.setMinimumSize(100, 100)
+        self.next_btn.setMinimumSize(100, 100)
         self.prev_btn.setEnabled(False)
+
+        self.layout.addWidget(self.img_box, 1, 3, 1, 2)
+        self.layout.addWidget(self.prev_btn, 2, 3)
+        self.layout.addWidget(self.next_btn, 2, 4)
+        self.layout.addWidget(self.radio_group, 1, 1, 1, 2)
+        self.layout.addWidget(self.excel_btn, 2, 1)
+        self.layout.addWidget(self.folder_btn, 2, 2)
 
     def init_vars(self):
         self.current_image_name = None
@@ -93,6 +104,8 @@ class Window(QWidget):
                 print("Nothing selected")
             else:
                 self.setup_images()
+                for radio in self.radios:
+                    radio.setEnabled(True)
         elif self.sender().text() == "Excel sheet":
             self.excel_path = QFileDialog.getOpenFileName(filter = 'Excel File (*.xlsx *.xls)')[0]
             if not self.excel_path:
@@ -233,7 +246,6 @@ class Window(QWidget):
             self.cycling = False
     
     def cycle_img(self):
-        print(self.img_num)
         if self.sender().text() == "Next Image" and self.img_num < len(self.folder_files) - 1:
             self.img_num += 1
         elif self.sender().text() == "Previous Image" and self.img_num > 0:
@@ -258,6 +270,7 @@ class Window(QWidget):
 def main():
     app = QApplication(sys.argv)
     window = Window()
+    window.setLayout(window.layout)
     window.show()
     sys.exit(app.exec())
 

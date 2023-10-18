@@ -1,9 +1,7 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QRadioButton, QGroupBox, QVBoxLayout, QFileDialog, QPushButton, QLabel, QLineEdit, QGridLayout
+import sys, os, re
+from PyQt6.QtWidgets import *
 from PyQt6.QtGui import QPixmap, QDoubleValidator
 from PyQt6.QtCore import QSize
-import sys
-import os
-import re
 from openpyxl import load_workbook
 
 class Window(QWidget):
@@ -12,20 +10,13 @@ class Window(QWidget):
 
         self.resize(1920,1080)
         self.setWindowTitle("EBCS Image Sorter")
-        self.init_vars()
         self.init_ui()
-
-        self.sorting_folder_path = None
-        self.excel_path = None
-
-        self.folder_btn.clicked.connect(self.launch_dialog)
-        self.excel_btn.clicked.connect(self.launch_dialog)
+        self.init_vars()
 
     def init_ui(self):
         self.radios = []
         self.radio_group = QGroupBox("Image Category", self)
         self.radio_vbox = QVBoxLayout()
-        self.layout = QGridLayout()
         
         self.counterfeit_radio = QRadioButton("Counterfeit Bills", self)
         self.money_order_radio = QRadioButton("Money Order/Transfer", self)
@@ -37,42 +28,44 @@ class Window(QWidget):
         self.receipt_radio = QRadioButton("Receipts", self)
         self.radios.extend((self.counterfeit_radio, self.money_order_radio, self.wire_radio, self.ach_radio, self.id_radio, self.credit_radio, self.enrollment_radio, self.receipt_radio))
 
-        self.amount_text = QLineEdit(self)
-        self.amount_text.hide()
-        self.amount_text.move(500,500)
-        self.amount_text.setValidator(QDoubleValidator())
-        self.amount_text.setMaxLength(15)
-        self.amount_text.textChanged.connect(self.amount_changed)
-
-        self.img_box = QLabel(self)
-        #self.img_box.move(700,0)
-        #self.img_box.resize(1000,1000)
-
-        #self.layout.lay
-
         for radio in self.radios:
             radio.toggled.connect(self.radio_clicked)
             self.radio_vbox.addWidget(radio)
             radio.setEnabled(False)
 
         self.radio_group.setLayout(self.radio_vbox)
+
+        self.cash_amount = QLineEdit(self)
+        self.cash_amount.move(500,500)
+        self.cash_amount.setValidator(QDoubleValidator())
+        self.cash_amount.setMaxLength(15)
+        self.cash_amount.textChanged.connect(self.amount_changed)
+        self.cash_amount.hide()
+
+        self.img_display = QLabel(self)
+
         self.folder_btn = QPushButton("Select EBCS sorting folder", self)
-        self.excel_btn = QPushButton("Excel sheet", self)
         self.folder_btn.setMinimumSize(100, 100)
-        self.excel_btn.setMinimumSize(100, 100)
+        self.folder_btn.clicked.connect(self.launch_dialog)
         self.folder_btn.hide()
 
-        self.next_btn = QPushButton("Next Image", self)
-        self.prev_btn = QPushButton("Previous Image", self)
-        self.next_btn.clicked.connect(self.cycle_img)
-        self.prev_btn.clicked.connect(self.cycle_img)
-        self.next_btn.hide()
-        self.prev_btn.hide()
-        self.prev_btn.setMinimumSize(100, 100)
-        self.next_btn.setMinimumSize(100, 100)
-        self.prev_btn.setEnabled(False)
+        self.excel_btn = QPushButton("Excel sheet", self)
+        self.excel_btn.setMinimumSize(100, 100)
+        self.excel_btn.clicked.connect(self.launch_dialog)
 
-        self.layout.addWidget(self.img_box, 1, 3, 1, 2)
+        self.prev_btn = QPushButton("Previous Image", self)
+        self.prev_btn.setMinimumSize(100, 100)
+        self.prev_btn.clicked.connect(self.cycle_img)
+        self.prev_btn.setEnabled(False)
+        self.prev_btn.hide()
+
+        self.next_btn = QPushButton("Next Image", self)
+        self.next_btn.setMinimumSize(100, 100)
+        self.next_btn.clicked.connect(self.cycle_img)
+        self.next_btn.hide()
+
+        self.layout = QGridLayout()
+        self.layout.addWidget(self.img_display, 1, 3, 1, 2)
         self.layout.addWidget(self.prev_btn, 2, 3)
         self.layout.addWidget(self.next_btn, 2, 4)
         self.layout.addWidget(self.radio_group, 1, 1, 1, 2)
@@ -80,22 +73,23 @@ class Window(QWidget):
         self.layout.addWidget(self.folder_btn, 2, 2)
 
     def init_vars(self):
+        self.sorting_folder_path = None
+        self.excel_path = None
         self.current_image_name = None
-        self.excel_columns = {"Counterfeit": ["C", 2], 
-                "Money Order": ["D", 2], 
-                "Wire": ["E", 2], 
-                "ACH": ["F", 2], 
-                "SSN": ["G", 2], 
-                "Credit Score": ["H", 2], 
-                "Enrollment": ["I", 2], 
+        self.excel_columns = {self.counterfeit_radio: ["C", 2], 
+                self.money_order_radio: ["D", 2], 
+                self.wire_radio: ["E", 2], 
+                self.ach_radio: ["F", 2], 
+                self.id_radio: ["G", 2], 
+                self.credit_radio: ["H", 2], 
+                self.enrollment_radio: ["I", 2], 
                 "Enrolled Bank": ["J", ""], 
-                "Receipt": ["K", 2], 
+                self.receipt_radio: ["K", 2], 
                 "Receipt Type": ["L", ""], 
                 "Receipt Bank": ["M", ""], 
                 "Amount": ["N", ""]}
         self.img_num = 0
         self.cycling = False
-
 
     def launch_dialog(self):
         if self.sender().text() == "Select EBCS sorting folder":
@@ -103,7 +97,7 @@ class Window(QWidget):
             if not self.sorting_folder_path:
                 print("Nothing selected")
             else:
-                self.setup_images()
+                self.setup_image()
                 for radio in self.radios:
                     radio.setEnabled(True)
         elif self.sender().text() == "Excel sheet":
@@ -112,7 +106,8 @@ class Window(QWidget):
                 print("Nothing selected")
             else:
                 self.folder_btn.show()
-                self.setup_excel()
+                self.excel = load_workbook(filename=self.excel_path)
+                self.excel_others = self.excel["5. Other"]
 
     def amount_changed(self):
         try:
@@ -123,63 +118,29 @@ class Window(QWidget):
             pass
 
     def radio_clicked(self):
-        # TODO: Clean up repeated switch statement
-        match self.sender():
-            case self.counterfeit_radio:
-                if self.sender().isChecked():
-                    self.excel_columns["Counterfeit"][1] = 1
-                else:
-                    self.excel_columns["Counterfeit"][1] = 2
-            case self.money_order_radio:
-                if self.sender().isChecked():
-                    self.excel_columns["Money Order"][1] = 1
-                else:
-                    self.excel_columns["Money Order"][1] = 2
-            case self.wire_radio:
-                if self.sender().isChecked():
-                    self.excel_columns["Wire"][1] = 1
-                else:
-                    self.excel_columns["Wire"][1] = 2
-            case self.ach_radio:
-                if self.sender().isChecked():
-                    self.excel_columns["ACH"][1] = 1
-                else:
-                    self.excel_columns["ACH"][1] = 2
-            case self.id_radio:
-                if self.sender().isChecked():
-                    self.excel_columns["SSN"][1] = 1
-                else:
-                    self.excel_columns["SSN"][1] = 2
-            case self.credit_radio:
-                if self.sender().isChecked():
-                    self.excel_columns["Credit Score"][1] = 1
-                else:
-                    self.excel_columns["Credit Score"][1] = 2
-            case self.enrollment_radio:
-                if self.sender().isChecked():
-                    self.excel_columns["Enrollment"][1] = 1
-                else:
-                    self.excel_columns["Enrollment"][1] = 2
-            case self.receipt_radio:
-                if self.sender().isChecked():
-                    self.excel_columns["Receipt"][1] = 1
-                    self.amount_text.show()
-                else:
-                    self.excel_columns["Receipt"][1] = 2
-                    self.amount_text.hide()
+        if self.sender().isChecked():
+            self.excel_columns[self.sender()][1] = 1
+            if self.sender() == self.receipt_radio:
+                self.cash_amount.show()
+        else:
+            self.excel_columns[self.sender()][1] = 2
+            if self.sender() == self.receipt_radio:
+                self.cash_amount.hide()
+
         # FIXME: This writes to excel sheet multiple times just for one action
         if not self.cycling and self.sender().isChecked():
             self.write_excel()
     
-    def setup_excel(self):
-        self.excel = load_workbook(filename=self.excel_path)
-        self.excel_others = self.excel["5. Other"]
-    
     # Find if image id in excel
     def find_entry(self):
         radio_columns = ["C","D","E","F","G","H","I","K"]
+
+        # File name is split into 5 parts
+        # 0. The string "photo", 1. photo id, 2. date (DD/MM/YYYY), 3. time (24 HR), 4. file type
         split = re.split("_|@|\.", self.current_image_name)
         self.excel_row = 1
+
+        # Find empty row or row where entry already exists
         while True:
             self.excel_row += 1
             if self.excel_others[f"A{self.excel_row}"].value == int(split[1]):
@@ -193,79 +154,60 @@ class Window(QWidget):
         self.excel_columns["Receipt Bank"][1] = self.excel_others[f"M{self.excel_row}"].value
         self.excel_columns["Amount"][1] = self.excel_others[f"N{self.excel_row}"].value
         
+        # Set amount & radio state for new img
         if self.excel_columns["Amount"][1]:
-            self.amount_text.setText(str(self.excel_columns["Amount"][1]))
+            self.cash_amount.setText(str(self.excel_columns["Amount"][1]))
         else:
-            self.amount_text.setText("")
+            self.cash_amount.setText("")
         
         for i, column in enumerate(radio_columns):
             if self.excel_others[f"{column}{self.excel_row}"].value == 1:
                 self.radios[i].setChecked(True)
             else:
+                # SetAutoExclusive to allow radio unchecking
                 self.radios[i].setAutoExclusive(False)
                 self.radios[i].setChecked(False)
                 self.radios[i].setAutoExclusive(True)
-        
-
-
-
     
     def write_excel(self):
-        # File name is split into 5 parts
-        # 0. The string "photo", 1. photo id, 2. date (DD/MM/YYYY), 3. time (24 HR), 4. file type
+        print(f"Writing on row {self.excel_row}")
         split = re.split("_|@|\.", self.current_image_name)
-
-        # Find empty row or row where entry already exists
-        row = 1
-        while True:
-            row += 1
-            if not self.excel_others[f"A{row}"].value:
-                print(f"writing new entry on row {row}")
-                break
-            elif self.excel_others[f"A{row}"].value == int(split[1]):
-                print(f"overwriting existing entry found on row {row}")
-                break
         
-        self.excel_others[f"A{row}"] = int(split[1])
-        self.excel_others[f"B{row}"] = split[2]
+        self.excel_others[f"A{self.excel_row}"] = int(split[1])
+        self.excel_others[f"B{self.excel_row}"] = split[2]
         for type in self.excel_columns:
-            self.excel_others[f"{self.excel_columns[type][0]}{row}"] = self.excel_columns[type][1]
-        self.excel.save(f'{__file__}/../NFCU_coding_template.xlsx')
+            self.excel_others[f"{self.excel_columns[type][0]}{self.excel_row}"] = self.excel_columns[type][1]
 
-    
-    def setup_images(self):
+        try:
+            self.excel.save(f'{__file__}/../NFCU_coding_template.xlsx')
+        except:
+            print("Failed to save excel sheet.")
+
+    def setup_image(self):
         self.folder_files = os.listdir(self.sorting_folder_path)
         if len(self.folder_files) > 0:
             self.cycling = True
-            self.img_box.setPixmap(QPixmap(f"{self.sorting_folder_path}/{self.folder_files[self.img_num]}").scaled(QSize(1000,1000)))
-            self.update()
+            self.img_display.setPixmap(QPixmap(f"{self.sorting_folder_path}/{self.folder_files[self.img_num]}").scaled(QSize(1000,1000)))
             self.current_image_name = self.folder_files[self.img_num]
+            self.update()
             self.find_entry()
             self.next_btn.show()
             self.prev_btn.show()
             self.cycling = False
     
     def cycle_img(self):
-        if self.sender().text() == "Next Image" and self.img_num < len(self.folder_files) - 1:
+        self.cycling = True
+        if self.sender() == self.next_btn:
             self.img_num += 1
-        elif self.sender().text() == "Previous Image" and self.img_num > 0:
+        elif self.sender() == self.prev_btn:
             self.img_num -= 1
         
-        self.cycling = True
-        if self.img_num > 0:
-            self.prev_btn.setEnabled(True)
-        else:
-            self.prev_btn.setEnabled(False)
-        if self.img_num < len(self.folder_files) - 1:
-            self.next_btn.setEnabled(True)
-        else:
-            self.next_btn.setEnabled(False)
+        self.prev_btn.setEnabled(self.img_num > 0)
+        self.next_btn.setEnabled(self.img_num < len(self.folder_files) - 1)
         self.cycling = False
 
         self.update()
-        self.setup_images()
-
-
+        self.setup_image()
 
 def main():
     app = QApplication(sys.argv)
@@ -273,7 +215,6 @@ def main():
     window.setLayout(window.layout)
     window.show()
     sys.exit(app.exec())
-
 
 if __name__ == "__main__":
     main()

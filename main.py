@@ -35,11 +35,33 @@ class Window(QWidget):
 
         self.radio_group.setLayout(self.radio_vbox)
 
+        self.subcategory_group = QGroupBox("Image Subcategory", self)
+        self.subcategory_vbox = QVBoxLayout()
+        self.receipt_type_group = QGroupBox("Receipt Type", self)
+        self.receipt_type_vbox = QVBoxLayout()
+
+        self.deposit_radio = QRadioButton("Deposit", self.receipt_type_group)
+        self.withdraw_radio = QRadioButton("Withdraw", self.receipt_type_group)
+        self.other_radio = QRadioButton("Other", self.receipt_type_group)
+
+        for radio in self.receipt_type_group.children():
+            radio.toggled.connect(self.radio_clicked)
+            self.receipt_type_vbox.addWidget(radio)
+
+        self.subcategory_vbox.addWidget(self.receipt_type_group)
+
+        #self.enrollment_bank = QLineEdit(self)
+        self.receipt_bank = QLineEdit(self)
+
+        self.receipt_type_group.setLayout(self.receipt_type_vbox)
+        self.subcategory_group.setLayout(self.subcategory_vbox)
+
         self.cash_amount = QLineEdit(self)
-        self.cash_amount.move(500,500)
+        self.cash_amount.setMinimumSize(10, 10)
         self.cash_amount.setValidator(QDoubleValidator())
         self.cash_amount.setMaxLength(15)
         self.cash_amount.textChanged.connect(self.amount_changed)
+        self.subcategory_vbox.addWidget(self.cash_amount)
         self.cash_amount.hide()
 
         self.img_display = QLabel(self)
@@ -68,7 +90,8 @@ class Window(QWidget):
         self.layout.addWidget(self.img_display, 1, 3, 1, 2)
         self.layout.addWidget(self.prev_btn, 2, 3)
         self.layout.addWidget(self.next_btn, 2, 4)
-        self.layout.addWidget(self.radio_group, 1, 1, 1, 2)
+        self.layout.addWidget(self.radio_group, 1, 1)
+        self.layout.addWidget(self.subcategory_group, 1, 2)
         self.layout.addWidget(self.excel_btn, 2, 1)
         self.layout.addWidget(self.folder_btn, 2, 2)
 
@@ -111,23 +134,30 @@ class Window(QWidget):
 
     def amount_changed(self):
         try:
-            if self.receipt_radio.isChecked():
+            # FIXME: This will save to excel when trying to cycle images and there is a dollar amount on the excel
+            if self.receipt_radio.isChecked() and not self.cycling:
                 self.excel_columns["Amount"][1] = float(self.sender().text())
                 self.write_excel()
         except ValueError:
             pass
 
     def radio_clicked(self):
-        if self.sender().isChecked():
-            self.excel_columns[self.sender()][1] = 1
-            if self.sender() == self.receipt_radio:
-                self.cash_amount.show()
+        # TODO: Clean nested if else, if possible
+        print(self.sender().text())
+        if self.sender().parent() == self.receipt_type_group:
+            if self.sender().isChecked():
+                self.excel_columns["Receipt Type"][1] = self.receipt_type_group.children().index(self.sender()) + 1
+                print(self.receipt_type_group.children().index(self.sender()) + 1)
         else:
-            self.excel_columns[self.sender()][1] = 2
-            if self.sender() == self.receipt_radio:
-                self.cash_amount.hide()
+            if self.sender().isChecked():
+                self.excel_columns[self.sender()][1] = 1
+                if self.sender() == self.receipt_radio:
+                    self.cash_amount.show()
+            else:
+                self.excel_columns[self.sender()][1] = 2
+                if self.sender() == self.receipt_radio:
+                    self.cash_amount.hide()
 
-        # FIXME: This writes to excel sheet multiple times just for one action
         if not self.cycling and self.sender().isChecked():
             self.write_excel()
     
@@ -155,10 +185,6 @@ class Window(QWidget):
         self.excel_columns["Amount"][1] = self.excel_others[f"N{self.excel_row}"].value
         
         # Set amount & radio state for new img
-        if self.excel_columns["Amount"][1]:
-            self.cash_amount.setText(str(self.excel_columns["Amount"][1]))
-        else:
-            self.cash_amount.setText("")
         
         for i, column in enumerate(radio_columns):
             if self.excel_others[f"{column}{self.excel_row}"].value == 1:
@@ -168,6 +194,21 @@ class Window(QWidget):
                 self.radios[i].setAutoExclusive(False)
                 self.radios[i].setChecked(False)
                 self.radios[i].setAutoExclusive(True)
+        
+        if self.excel_others[f"L{self.excel_row}"].value:
+            print(f"Receipt Type: {self.excel_others[f'L{self.excel_row}'].value}")
+            self.receipt_type_group.findChildren(QRadioButton)[self.excel_others[f"L{self.excel_row}"].value - 1].setChecked(True)
+        else:
+            for radio in self.receipt_type_group.findChildren(QRadioButton):
+                radio.setAutoExclusive(False)
+                radio.setChecked(False)
+                radio.setAutoExclusive(True)
+        
+        if self.excel_columns["Amount"][1]:
+            self.cash_amount.setText(str(self.excel_columns["Amount"][1]))
+        else:
+            self.cash_amount.setText("")
+
     
     def write_excel(self):
         print(f"Writing on row {self.excel_row}")
@@ -179,7 +220,7 @@ class Window(QWidget):
             self.excel_others[f"{self.excel_columns[type][0]}{self.excel_row}"] = self.excel_columns[type][1]
 
         try:
-            self.excel.save(f'{__file__}/../NFCU_coding_template.xlsx')
+            self.excel.save(self.excel_path)
         except:
             print("Failed to save excel sheet.")
 

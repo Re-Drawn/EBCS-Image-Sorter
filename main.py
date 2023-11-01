@@ -47,11 +47,9 @@ class Window(QWidget):
         for radio in self.receipt_type_group.children():
             radio.toggled.connect(self.radio_clicked)
             self.receipt_type_vbox.addWidget(radio)
+            radio.setEnabled(False)
 
         self.subcategory_vbox.addWidget(self.receipt_type_group)
-
-        #self.enrollment_bank = QLineEdit(self)
-        self.receipt_bank = QLineEdit(self)
 
         self.receipt_type_group.setLayout(self.receipt_type_vbox)
         self.subcategory_group.setLayout(self.subcategory_vbox)
@@ -60,9 +58,17 @@ class Window(QWidget):
         self.cash_amount.setMinimumSize(10, 10)
         self.cash_amount.setValidator(QDoubleValidator())
         self.cash_amount.setMaxLength(15)
+        self.cash_amount.setPlaceholderText("Cash Amount")
         self.cash_amount.textChanged.connect(self.amount_changed)
         self.subcategory_vbox.addWidget(self.cash_amount)
-        self.cash_amount.hide()
+        self.cash_amount.setDisabled(True)
+
+        self.bank_text = QLineEdit(self)
+        self.subcategory_vbox.addWidget(self.bank_text)
+        self.bank_text.setPlaceholderText("Bank")
+        self.bank_text.textChanged.connect(self.amount_changed)
+        self.bank_text.setDisabled(True)
+        
 
         self.img_display = QLabel(self)
 
@@ -134,10 +140,18 @@ class Window(QWidget):
 
     def amount_changed(self):
         try:
-            # FIXME: This will save to excel when trying to cycle images and there is a dollar amount on the excel
-            if self.receipt_radio.isChecked() and not self.cycling:
-                self.excel_columns["Amount"][1] = float(self.sender().text())
-                self.write_excel()
+            if self.sender() == self.cash_amount:
+                # FIXME: This will save to excel when trying to cycle images and there is a dollar amount on the excel
+                if self.receipt_radio.isChecked() and not self.cycling:
+                    self.excel_columns["Amount"][1] = float(self.sender().text())
+                    self.write_excel()
+            elif self.sender() == self.bank_text:
+                if self.receipt_radio.isChecked():
+                    self.excel_columns["Receipt Bank"][1] = self.sender().text()
+                    self.write_excel()
+                elif self.enrollment_radio.isChecked():
+                    self.excel_columns["Enrolled Bank"][1] = self.sender().text()
+                    self.write_excel()
         except ValueError:
             pass
 
@@ -152,11 +166,31 @@ class Window(QWidget):
             if self.sender().isChecked():
                 self.excel_columns[self.sender()][1] = 1
                 if self.sender() == self.receipt_radio:
-                    self.cash_amount.show()
+                    self.cash_amount.setDisabled(False)
+                    self.bank_text.setDisabled(False)
+                    for radio in self.receipt_type_group.children():
+                        radio.setEnabled(True)
+                elif self.sender() == self.enrollment_radio:
+                    self.bank_text.setDisabled(False)
             else:
                 self.excel_columns[self.sender()][1] = 2
                 if self.sender() == self.receipt_radio:
-                    self.cash_amount.hide()
+                    self.cash_amount.setDisabled(True)
+                    self.bank_text.setDisabled(True)
+                    self.cash_amount.setText("")
+                    self.bank_text.setText("")
+                    self.excel_columns["Amount"][1] = ""
+                    self.excel_columns["Receipt Type"][1] = ""
+                    self.excel_columns["Receipt Bank"][1] = ""
+                    for radio in self.receipt_type_group.findChildren(QRadioButton):
+                        radio.setAutoExclusive(False)
+                        radio.setChecked(False)
+                        radio.setAutoExclusive(True)
+                        radio.setEnabled(False)
+                elif self.sender() == self.enrollment_radio:
+                    self.bank_text.setDisabled(True)
+                    self.bank_text.setText("")
+                    self.excel_columns["Enrolled Bank"][1] = ""
 
         if not self.cycling and self.sender().isChecked():
             self.write_excel()
@@ -181,6 +215,7 @@ class Window(QWidget):
                 break
 
         self.excel_columns["Enrolled Bank"][1] = self.excel_others[f"J{self.excel_row}"].value
+        self.excel_columns["Receipt Type"][1] = self.excel_others[f"L{self.excel_row}"].value
         self.excel_columns["Receipt Bank"][1] = self.excel_others[f"M{self.excel_row}"].value
         self.excel_columns["Amount"][1] = self.excel_others[f"N{self.excel_row}"].value
         
@@ -208,6 +243,13 @@ class Window(QWidget):
             self.cash_amount.setText(str(self.excel_columns["Amount"][1]))
         else:
             self.cash_amount.setText("")
+        
+        if self.excel_columns["Enrolled Bank"][1]:
+            self.bank_text.setText(self.excel_columns["Enrolled Bank"][1])
+        elif self.excel_columns["Receipt Bank"][1]:
+            self.bank_text.setText(self.excel_columns["Receipt Bank"][1])
+        else:
+            self.bank_text.setText("")
 
     
     def write_excel(self):

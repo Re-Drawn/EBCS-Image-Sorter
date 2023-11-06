@@ -69,13 +69,13 @@ class Window(QWidget):
         self.bank_text.textChanged.connect(self.amount_changed)
         self.bank_text.setDisabled(True)
         
-
         self.img_display = QLabel(self)
+        self.img_display.setMinimumSize(1000,100)
 
         self.folder_btn = QPushButton("Select EBCS sorting folder", self)
         self.folder_btn.setMinimumSize(100, 100)
         self.folder_btn.clicked.connect(self.launch_dialog)
-        self.folder_btn.hide()
+        self.folder_btn.setDisabled(True)
 
         self.excel_btn = QPushButton("Excel sheet", self)
         self.excel_btn.setMinimumSize(100, 100)
@@ -84,7 +84,7 @@ class Window(QWidget):
         self.prev_btn = QPushButton("Previous Image", self)
         self.prev_btn.setMinimumSize(100, 100)
         self.prev_btn.clicked.connect(self.cycle_img)
-        self.prev_btn.setEnabled(False)
+        self.prev_btn.setDisabled(True)
         self.prev_btn.hide()
 
         self.next_btn = QPushButton("Next Image", self)
@@ -134,7 +134,7 @@ class Window(QWidget):
             if not self.excel_path:
                 print("Nothing selected")
             else:
-                self.folder_btn.show()
+                self.folder_btn.setEnabled(True)
                 self.excel = load_workbook(filename=self.excel_path)
                 self.excel_others = self.excel["5. Other"]
 
